@@ -13,6 +13,8 @@ import android.os.IBinder;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 
 public class AudiobookService extends Service {
@@ -23,6 +25,7 @@ public class AudiobookService extends Service {
     Handler progressHandler;
     Thread progressThread;
     int playingState; //0 - stopped, 1 - playing, 2 - paused
+    int startPosition;
 
     private final String NOTIFICATION_CHANNEL_ID = "media_player_control";
     private final String BOOK_DOWNLOAD_URL = "https://kamorris.com/lab/audlib/download.php?id=";
@@ -41,6 +44,10 @@ public class AudiobookService extends Service {
             public void onPrepared(MediaPlayer mediaPlayer) {
                 Log.i(TAG, "Audiobook prepared");
                 playingState = 1;
+                if (startPosition > 0) {
+                    mediaPlayer.seekTo(1000 * startPosition);
+                    startPosition = 0;
+                }
                 mediaPlayer.start();
                 progressThread = new NotifyProgress();
                 progressThread.start();
@@ -92,6 +99,31 @@ public class AudiobookService extends Service {
         }
     }
 
+    private void play(int id, int position) {
+        startPosition = position;
+        play(id);
+    }
+
+    private void play(File file) {
+        try {
+            mediaPlayer.reset();
+            mediaPlayer.setDataSource((new FileInputStream(file)).getFD());
+            playingState = 0;
+            mediaPlayer.prepareAsync();
+            Log.i(TAG, "Audiobook playing");
+            int FOREGROUND_CODE = 1;
+            startForeground(FOREGROUND_CODE, notification);
+            Log.i(TAG, "Foreground notification started");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void play(File file, int position) {
+        startPosition = position;
+        play(file);
+    }
+
     private void pause () {
         if (playingState == 1) {
             playingState = 2;
@@ -130,8 +162,21 @@ public class AudiobookService extends Service {
     }
 
     public class MediaControlBinder extends Binder {
+
         public void play(int id) {
             AudiobookService.this.play(id);
+        }
+
+        public void play(int id, int startPosition) {
+            AudiobookService.this.play(id, startPosition);
+        }
+
+        public void play(File file) {
+            AudiobookService.this.play(file);
+        }
+
+        public void play(File file, int startPosition) {
+            AudiobookService.this.play(file, startPosition);
         }
 
         public void pause() {
@@ -149,6 +194,7 @@ public class AudiobookService extends Service {
         public void seekTo(int position) {
             AudiobookService.this.seekTo(position);
         }
+
     }
 
     @Override
@@ -186,5 +232,6 @@ public class AudiobookService extends Service {
                 }
             }
         }
+
     }
 }
