@@ -11,5 +11,3 @@ AudiobookPlayer is a library that allows a client to play from a collection of p
 
 Binding to this library returns an instance of AudiobookService.MediaControlBinder, which provides an interface to all supported features.
 Progress reporting is supported via a handler.
-
-Your application must declare the android.permission.INTERNET permission to use this library.
