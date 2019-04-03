@@ -90,7 +90,7 @@ public class AudiobookService extends Service {
             mediaPlayer.setDataSource(BOOK_DOWNLOAD_URL + id);
             playingState = 0;
             mediaPlayer.prepareAsync();
-            Log.i(TAG, "Audiobook playing");
+            Log.i(TAG, "Audiobook preparing");
             int FOREGROUND_CODE = 1;
             startForeground(FOREGROUND_CODE, notification);
             Log.i(TAG, "Foreground notification started");
@@ -110,7 +110,7 @@ public class AudiobookService extends Service {
             mediaPlayer.setDataSource((new FileInputStream(file)).getFD());
             playingState = 0;
             mediaPlayer.prepareAsync();
-            Log.i(TAG, "Audiobook playing");
+            Log.i(TAG, "Audiobook preparing");
             int FOREGROUND_CODE = 1;
             startForeground(FOREGROUND_CODE, notification);
             Log.i(TAG, "Foreground notification started");
