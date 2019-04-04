@@ -228,7 +228,10 @@ public class AudiobookService extends Service {
                     Log.i(TAG, "Progress update stopped");
                 }
                 if (progressHandler != null) {
-                    progressHandler.sendEmptyMessage(mediaPlayer.getCurrentPosition() / 1000);
+                    if (playingState == 1)
+                        progressHandler.sendEmptyMessage(mediaPlayer.getCurrentPosition() / 1000);
+                    else if (playingState == 0)
+                        progressHandler.sendEmptyMessage(0);
                 }
             }
         }
