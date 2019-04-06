@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.os.Binder;
 import android.os.Build;
@@ -17,18 +18,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 
-public class AudiobookService extends Service {
+public class AudiobookService extends Service implements MediaPlayer.OnPreparedListener, MediaPlayer.OnCompletionListener {
 
+    private final MediaControlBinder binder = new MediaControlBinder();
     private static final String TAG = "Audiobook Service";
-    MediaPlayer mediaPlayer;
+    private final MediaPlayer mediaPlayer = new MediaPlayer();
     Notification notification;
     Handler progressHandler;
     Thread progressThread;
-    int playingState; //0 - stopped, 1 - playing, 2 - paused
+    int playingState; // 0 - stopped, 1 - playing, 2 - paused
     int startPosition;
 
     private final String NOTIFICATION_CHANNEL_ID = "media_player_control";
-    private final String BOOK_DOWNLOAD_URL = "https://kamorris.com/lab/audlib/download.php?id=";
 
     public AudiobookService() {}
 
@@ -38,30 +39,9 @@ public class AudiobookService extends Service {
 
         createNotificationChannel();
 
-        mediaPlayer = new MediaPlayer();
-        mediaPlayer.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-            @Override
-            public void onPrepared(MediaPlayer mediaPlayer) {
-                Log.i(TAG, "Audiobook prepared");
-                playingState = 1;
-                if (startPosition > 0) {
-                    mediaPlayer.seekTo(1000 * startPosition);
-                    startPosition = 0;
-                }
-                mediaPlayer.start();
-                progressThread = new NotifyProgress();
-                progressThread.start();
-                Log.i(TAG, "Audiobook started");
-
-            }
-        });
-        mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override
-            public void onCompletion(MediaPlayer mp) {
-                mp.reset();
-                progressThread = null;
-            }
-        });
+        mediaPlayer.setAudioAttributes(new AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build());
+        mediaPlayer.setOnPreparedListener(this);
+        mediaPlayer.setOnCompletionListener(this);
 
         String NOTIFICATION_PLAYING_TITLE = getString(R.string.notification_playing_title);
         String NOTIFICATION_PLAYING_DESCRIPTION = getString(R.string.notification_playing_description);
@@ -71,12 +51,14 @@ public class AudiobookService extends Service {
                 .setContentText(NOTIFICATION_PLAYING_DESCRIPTION)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .build();
+
+
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         Log.i(TAG, "Player bound");
-        return new MediaControlBinder();
+        return binder;
     }
 
     private void setHandler (Handler handler) {
@@ -87,6 +69,7 @@ public class AudiobookService extends Service {
     private void play(int id) {
         try {
             mediaPlayer.reset();
+            String BOOK_DOWNLOAD_URL = "https://kamorris.com/lab/audlib/download.php?id=";
             mediaPlayer.setDataSource(BOOK_DOWNLOAD_URL + id);
             playingState = 0;
             mediaPlayer.prepareAsync();
@@ -136,7 +119,7 @@ public class AudiobookService extends Service {
         } else if (playingState == 2) {
             playingState = 1;
             mediaPlayer.start();
-            progressThread = new NotifyProgress();
+            progressThread = new Thread(new NotifyProgress());
             progressThread.start();
             Log.i(TAG, "Player started");
         }
@@ -203,6 +186,12 @@ public class AudiobookService extends Service {
         return super.onUnbind(intent);
     }
 
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        mediaPlayer.release();
+    }
+
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             CharSequence name = getString(R.string.notification_channel);
@@ -217,7 +206,29 @@ public class AudiobookService extends Service {
         }
     }
 
-    class NotifyProgress extends Thread {
+    @Override
+    public void onPrepared(MediaPlayer mediaPlayer) {
+        Log.i(TAG, "Audiobook prepared");
+        playingState = 1;
+        if (startPosition > 0) {
+            mediaPlayer.seekTo(1000 * startPosition);
+            startPosition = 0;
+        }
+
+        mediaPlayer.start();
+        progressThread = new Thread(new NotifyProgress());
+        progressThread.start();
+        Log.i(TAG, "Audiobook started");
+
+    }
+
+    @Override
+    public void onCompletion(MediaPlayer mp) {
+        mp.reset();
+        progressThread = null;
+    }
+
+    class NotifyProgress implements Runnable {
 
         @Override
         public void run() {
