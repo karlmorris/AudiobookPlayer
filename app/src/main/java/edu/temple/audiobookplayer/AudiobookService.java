@@ -177,6 +177,10 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
         public void seekTo(int position) {
             AudiobookService.this.seekTo(position);
         }
+        
+         public AudiobookService getService() {
+            return AudiobookService.this;
+        }
 
     }
 
