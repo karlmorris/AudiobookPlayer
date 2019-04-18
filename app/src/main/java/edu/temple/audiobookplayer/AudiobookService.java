@@ -211,10 +211,8 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
         Log.i(TAG, "Audiobook prepared");
         playingState = 1;
         if (startPosition > 0) {
-            mediaPlayer.seekTo(1000 * startPosition);
-            startPosition = 0;
+            new Thread(new SeekDelay(500)).start();
         }
-
         mediaPlayer.start();
         progressThread = new Thread(new NotifyProgress());
         progressThread.start();
@@ -226,6 +224,7 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
     public void onCompletion(MediaPlayer mp) {
         mp.reset();
         progressThread = null;
+        stopSelf();
     }
 
     class NotifyProgress implements Runnable {
@@ -247,5 +246,25 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
             }
         }
 
+    }
+
+    class SeekDelay implements Runnable {
+
+        int delay;
+
+        public SeekDelay(int delay) {
+            this.delay = delay;
+        }
+
+        @Override
+        public void run() {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            mediaPlayer.seekTo(1000 * startPosition);
+            startPosition = 0;
+        }
     }
 }
