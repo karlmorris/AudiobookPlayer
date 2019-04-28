@@ -144,6 +144,11 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
         }
     }
 
+    private boolean isPlaying() {
+        return mediaPlayer.isPlaying();
+    }
+
+    @SuppressWarnings("unused")
     public class MediaControlBinder extends Binder {
 
         public void play(int id) {
@@ -176,6 +181,10 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
         public void seekTo(int position) {
             AudiobookService.this.seekTo(position);
+        }
+
+        public boolean isPlaying() {
+            return AudiobookService.this.isPlaying();
         }
 
     }
@@ -252,7 +261,7 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
         int delay;
 
-        public SeekDelay(int delay) {
+        SeekDelay(int delay) {
             this.delay = delay;
         }
 
