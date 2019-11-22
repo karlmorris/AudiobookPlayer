@@ -7,10 +7,12 @@ import android.app.Service;
 import android.content.Intent;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
@@ -23,11 +25,13 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
     private final MediaControlBinder binder = new MediaControlBinder();
     private static final String TAG = "Audiobook Service";
     private final MediaPlayer mediaPlayer = new MediaPlayer();
-    Notification notification;
-    Handler progressHandler;
-    Thread progressThread;
-    int playingState; // 0 - stopped, 1 - playing, 2 - paused
-    int startPosition;
+    private Notification notification;
+    private Handler progressHandler;
+    private Thread progressThread;
+    private PlayingState playingState = PlayingState.STOPPED; // 0 - stopped, 1 - playing, 2 - paused
+    private int startPosition;
+    private int currentBookId = -1;
+    private Uri currentBookUri;
 
     private final String NOTIFICATION_CHANNEL_ID = "media_player_control";
 
@@ -68,10 +72,12 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
     private void play(int id) {
         try {
+            currentBookId = id;
+            currentBookUri = null;
             mediaPlayer.reset();
             String BOOK_DOWNLOAD_URL = "https://kamorris.com/lab/audlib/download.php?id=";
             mediaPlayer.setDataSource(BOOK_DOWNLOAD_URL + id);
-            playingState = 0;
+            playingState = PlayingState.STOPPED;
             mediaPlayer.prepareAsync();
             Log.i(TAG, "Audiobook preparing");
             int FOREGROUND_CODE = 1;
@@ -89,9 +95,11 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
     private void play(File file) {
         try {
+            currentBookUri = Uri.fromFile(file);
+            currentBookId = -1;
             mediaPlayer.reset();
             mediaPlayer.setDataSource((new FileInputStream(file)).getFD());
-            playingState = 0;
+            playingState = PlayingState.STOPPED;
             mediaPlayer.prepareAsync();
             Log.i(TAG, "Audiobook preparing");
             int FOREGROUND_CODE = 1;
@@ -108,16 +116,16 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
     }
 
     private void pause () {
-        if (playingState == 1) {
-            playingState = 2;
+        if (playingState == PlayingState.PLAYING) {
+            playingState = PlayingState.PAUSED;
             mediaPlayer.pause();
             if (progressThread != null) {
                 progressThread.interrupt();
                 progressThread = null;
             }
             Log.i(TAG, "Player paused");
-        } else if (playingState == 2) {
-            playingState = 1;
+        } else if (playingState == PlayingState.PAUSED) {
+            playingState = PlayingState.PLAYING;
             mediaPlayer.start();
             progressThread = new Thread(new NotifyProgress());
             progressThread.start();
@@ -127,7 +135,7 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
     private void stop() {
         mediaPlayer.stop();
-        playingState = 0;
+        playingState = PlayingState.STOPPED;
         stopForeground(true);
         if (progressThread != null) {
             progressThread.interrupt();
@@ -218,7 +226,7 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
     @Override
     public void onPrepared(MediaPlayer mediaPlayer) {
         Log.i(TAG, "Audiobook prepared");
-        playingState = 1;
+        playingState = PlayingState.PLAYING;
         if (startPosition > 0) {
             new Thread(new SeekDelay(500)).start();
         }
@@ -240,16 +248,22 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
 
         @Override
         public void run() {
-            while (playingState == 1) {
+            Message message;
+            while (playingState == PlayingState.PLAYING) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     Log.i(TAG, "Progress update stopped");
                 }
                 if (progressHandler != null) {
-                    if (playingState == 1)
-                        progressHandler.sendEmptyMessage(mediaPlayer.getCurrentPosition() / 1000);
-                    else if (playingState == 0)
+                    if (playingState == PlayingState.PLAYING) {
+                        message = Message.obtain();
+                        if (currentBookId >= 0)
+                            message.obj = new BookProgress(currentBookId, mediaPlayer.getCurrentPosition() / 1000);
+                        else
+                            message.obj = new BookProgress(currentBookUri, mediaPlayer.getCurrentPosition() / 1000);
+                        progressHandler.sendMessage(message);
+                    } else if (playingState == PlayingState.PAUSED)
                         progressHandler.sendEmptyMessage(0);
                 }
             }
@@ -274,6 +288,38 @@ public class AudiobookService extends Service implements MediaPlayer.OnPreparedL
             }
             mediaPlayer.seekTo(1000 * startPosition);
             startPosition = 0;
+        }
+    }
+
+    enum PlayingState {
+        STOPPED, PLAYING, PAUSED
+    }
+
+    public class BookProgress {
+        private int bookId = -1;
+        private Uri bookUri;
+        private int progress;
+
+        public BookProgress(int bookId, int progress) {
+            this.bookId = bookId;
+            this.progress = progress;
+        }
+
+        public BookProgress(Uri bookUri, int progress) {
+            this.bookUri = bookUri;
+            this.progress = progress;
+        }
+
+        public int getBookId() {
+            return bookId;
+        }
+
+        public Uri getBookUri() {
+            return bookUri;
+        }
+
+        public int getProgress() {
+            return progress;
         }
     }
 }
